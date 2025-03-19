@@ -1,12 +1,9 @@
-variable "nomad_token" {
-  type = string
-}
-
 variable "traefik_image_digest" {
   type = string
 }
 
 job "traefik" {
+  namespace = "traefik"
   type = "service"
 
   group "traefik" {
@@ -35,27 +32,50 @@ job "traefik" {
     task "traefik" {
       driver = "docker"
       config {
-        image = "traefik@${var.traefik_image_digest}"
-        args = [
-          "--api",
-          "--api.dashboard",
-          "--api.insecure",
-          "--entrypoints.websecure.address=:${NOMAD_PORT_https}",
-          "--entrypoints.web.address=:${NOMAD_PORT_http}",
-          "--entrypoints.web.http.redirections.entrypoint.to=websecure",
-          "--entrypoints.web.http.redirections.entrypoint.scheme=https",
-          "--providers.nomad=true",
-          "--providers.nomad.endpoint.token=${var.nomad_token}",
-          "--log.level=info",
-          "--certificatesresolvers.leresolver.acme.httpchallenge=true",
-          "--certificatesresolvers.leresolver.acme.email=jonathan.tremesaygues@slaanesh.org",
-          "--certificatesresolvers.leresolver.acme.storage=/data/acme.json",
-          "--certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web",
-        ]
+        image        = "traefik@${var.traefik_image_digest}"
         network_mode = "host"
         volumes = [
-          "traefik_data:/data"
+          "traefik_data:/data",
+          "local/config.yml:/etc/traefik/traefik.yml",
         ]
+      }
+
+      template {
+        data        = <<EOF
+api:
+  dashboard: true
+  insecure: true
+
+entrypoints:
+  websecure:
+    address: ":{{ env "NOMAD_PORT_https" }}"
+
+  web:
+    address: ":{{ env "NOMAD_PORT_http" }}"
+    http:
+      redirections:
+        entryPoint:
+          to: "websecure"
+          scheme: "https"
+          permanent: true
+
+providers:
+  nomad:
+    endpoint:
+      token: {{ with nomadVar "nomad/jobs/traefik/traefik/traefik" }}{{ .nomad_token }}{{ end }}
+
+log:
+  level: "info"
+
+certificatesResolvers:
+  leresolver:
+    acme:
+      httpChallenge:
+        entryPoint: web
+      email: "jonathan.tremesaygues@slaanesh.org"
+      storage: "/data/acme.json"
+EOF
+        destination = "local/config.yml"
       }
     }
   }
