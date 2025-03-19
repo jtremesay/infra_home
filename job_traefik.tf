@@ -27,6 +27,7 @@ data "docker_registry_image" "traefik" {
 
 resource "nomad_job" "traefik" {
     jobspec = file("./jobs/traefik.hcl")
+    purge_on_destroy = true
     hcl2 {
       vars = {
         "traefik_image_digest": data.docker_registry_image.traefik.sha256_digest,
