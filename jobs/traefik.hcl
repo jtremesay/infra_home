@@ -17,7 +17,7 @@ job "traefik" {
     }
 
     service {
-      name     = "traefik-http"
+      name     = "traefik-dashboard"
       provider = "nomad"
       port     = "http"
 
@@ -35,8 +35,9 @@ job "traefik" {
         image        = "traefik@${var.traefik_image_digest}"
         network_mode = "host"
         volumes = [
-          "traefik_data:/data",
+          "traefik_data:/data/",
           "local/config.yml:/etc/traefik/traefik.yml",
+          "local/routes/:/etc/traefik/routes/",
         ]
       }
 
@@ -61,11 +62,17 @@ entrypoints:
 
 providers:
   nomad:
+    exposedByDefault: false
     endpoint:
-      token: {{ with nomadVar "nomad/jobs/traefik/traefik/traefik" }}{{ .nomad_token }}{{ end }}
+      token: "{{ with nomadVar "nomad/jobs/traefik/traefik/traefik" }}{{ .nomad_token }}{{ end }}"
+    namespaces:
+      - "default"
+      - "traefik"
+  file:
+    directory: "/etc/traefik/routes/"
 
 log:
-  level: "info"
+  level: "DEBUG"
 
 certificatesResolvers:
   leresolver:
@@ -76,6 +83,25 @@ certificatesResolvers:
       storage: "/data/acme.json"
 EOF
         destination = "local/config.yml"
+      }
+
+      template {
+        data = <<EOF
+http:
+  routers:
+    nomad:
+      rule: "Host(`nomad.home.jtremesay.org`)"
+      service: nomad
+      tls:
+        certresolver: "leresolver"
+
+  services:
+    nomad:
+      loadBalancer:
+        servers:
+          - url: "http://localhost:4646"
+EOF
+        destination = "local/routes/nomad.yml"
       }
     }
   }
