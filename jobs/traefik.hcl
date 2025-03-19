@@ -2,6 +2,10 @@ variable "nomad_token" {
   type = string
 }
 
+variable "traefik_image_digest" {
+  type = string
+}
+
 job "traefik" {
   type = "service"
 
@@ -31,7 +35,7 @@ job "traefik" {
     task "traefik" {
       driver = "docker"
       config {
-        image = "traefik:3"
+        image = "traefik@${var.traefik_image_digest}"
         args = [
           "--api",
           "--api.dashboard",
